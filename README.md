@@ -6,6 +6,10 @@ party, from January 2017 through July 2026.
 
 ![German Bundestag polling chart](german_polls_bundestag.png)
 
+A second chart covers only the polls since the February 2025 federal election:
+
+![Polls since the 2025 election](german_polls_recent.png)
+
 ## Usage
 
 Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies
@@ -15,10 +19,10 @@ Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies
 uv run main.py
 ```
 
-Options:
+This writes both PNGs. Options:
 
 ```sh
-uv run main.py --csv path/to/polls.csv --out chart.png
+uv run main.py --csv path/to/polls.csv --out chart.png --out-recent recent.png
 ```
 
 ## Data

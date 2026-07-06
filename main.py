@@ -67,7 +67,7 @@ def spread_labels(positions: list[float], min_gap: float, lo: float, hi: float) 
     return out
 
 
-def plot(df: pd.DataFrame, out_path: str) -> None:
+def plot(df: pd.DataFrame, out_path: str, title: str) -> None:
     fig, ax = plt.subplots(figsize=(14, 8), dpi=200)
     fig.set_facecolor(SURFACE)
     ax.set_facecolor(SURFACE)
@@ -84,6 +84,8 @@ def plot(df: pd.DataFrame, out_path: str) -> None:
 
     for date, name in ELECTIONS.items():
         ts = pd.Timestamp(date)
+        if not (df.index.min() < ts < df.index.max()):
+            continue
         ax.axvline(ts, color=MUTED, linewidth=0.8, linestyle=(0, (4, 4)), alpha=0.6)
         ax.annotate(
             name, (ts, 0.995), xycoords=("data", "axes fraction"),
@@ -100,8 +102,10 @@ def plot(df: pd.DataFrame, out_path: str) -> None:
     # Direct labels at the right edge: party name + latest smoothed value,
     # in ink (not series color) with a colored dash tying label to line.
     parties = list(label_targets)
-    ymax = max(df[list(PARTIES)].max().max() + 2, 42)
-    labeled_ys = spread_labels([label_targets[p] for p in parties], 1.6, 0.5, ymax - 0.5)
+    ymax = df[[p for p in PARTIES if p in df.columns]].max().max() + 2
+    labeled_ys = spread_labels(
+        [label_targets[p] for p in parties], ymax * 0.04, ymax * 0.01, ymax * 0.99
+    )
     x_end = df.index.max()
     for party, y_label in zip(parties, labeled_ys):
         ax.annotate(
@@ -121,8 +125,12 @@ def plot(df: pd.DataFrame, out_path: str) -> None:
     ax.set_ylim(0, ymax)
     ax.set_xlim(df.index.min(), x_end)
     ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
-    ax.xaxis.set_major_locator(mdates.YearLocator())
-    ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    if (df.index.max() - df.index.min()).days > 3 * 365:
+        ax.xaxis.set_major_locator(mdates.YearLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%Y"))
+    else:
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
     ax.grid(axis="y", color="#e6e3e0", linewidth=0.7)
     ax.set_axisbelow(True)
     for spine in ("top", "right", "left"):
@@ -131,10 +139,7 @@ def plot(df: pd.DataFrame, out_path: str) -> None:
     ax.tick_params(colors=MUTED, labelsize=10, length=0)
 
     n_polls = len(df)
-    ax.set_title(
-        "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …",
-        fontsize=16, color=INK, loc="left", pad=28, fontweight="bold",
-    )
+    ax.set_title(title, fontsize=16, color=INK, loc="left", pad=28, fontweight="bold")
     ax.text(
         0, 1.025,
         f"{n_polls} Umfragen, {df.index.min():%b %Y} – {df.index.max():%b %Y} · "
@@ -156,8 +161,15 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--csv", default="german_polls_bundestag.csv")
     parser.add_argument("--out", default="german_polls_bundestag.png")
+    parser.add_argument("--out-recent", default="german_polls_recent.png")
     args = parser.parse_args()
-    plot(load_polls(args.csv), args.out)
+    df = load_polls(args.csv)
+    plot(df, args.out, "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …")
+    plot(
+        df[df.index > "2025-02-23"],
+        args.out_recent,
+        "Sonntagsfrage seit der Bundestagswahl 2025",
+    )
 
 
 if __name__ == "__main__":

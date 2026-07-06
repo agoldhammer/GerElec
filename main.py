@@ -109,6 +109,84 @@ def dodge(values: list[float], gap: float = 0.5, step: float = 0.16) -> list[flo
     return offsets
 
 
+def plot_institute_trends(df: pd.DataFrame, out_path: str) -> None:
+    since = df[df.index > "2025-02-23"]
+    counts = since.groupby("institute").size()
+    institutes = counts[counts >= 15].sort_values(ascending=False).index
+
+    ncols = 4
+    nrows = -(-len(institutes) // ncols)
+    fig, axes = plt.subplots(
+        nrows, ncols, figsize=(14, 3.4 * nrows + 1.9), dpi=200,
+        sharex=True, sharey=True,
+    )
+    fig.set_facecolor(SURFACE)
+
+    ymax = 0.0
+    for ax, inst in zip(axes.flat, institutes):
+        ax.set_facecolor(SURFACE)
+        sub = since[since["institute"] == inst]
+        for party, color in PARTIES.items():
+            series = sub[party].dropna()
+            if series.empty:
+                continue
+            ax.scatter(series.index, series.values, s=4, color=color,
+                       alpha=0.25, linewidths=0)
+            # Institutes poll at very different rates, so use a wider
+            # window than the overall trend charts.
+            smoothed = series.rolling("42D").mean()
+            ax.plot(smoothed.index, smoothed.values, color=color,
+                    linewidth=1.6, solid_capstyle="round")
+            ymax = max(ymax, series.max())
+        ax.axhline(5, color=MUTED, linewidth=0.7, linestyle=(0, (1, 3)), alpha=0.8)
+        ax.set_title(f"{inst}  ·  {len(sub)} Umfragen", fontsize=10.5,
+                     color=INK, loc="left", pad=6)
+        ax.grid(axis="y", color="#e6e3e0", linewidth=0.6)
+        ax.set_axisbelow(True)
+        for spine in ("top", "right", "left"):
+            ax.spines[spine].set_visible(False)
+        ax.spines["bottom"].set_color("#d5d1cd")
+        ax.tick_params(colors=MUTED, labelsize=8.5, length=0)
+        ax.xaxis.set_major_locator(mdates.MonthLocator(interval=4))
+        ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %y"))
+        ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    for ax in axes.flat[len(institutes):]:
+        ax.set_visible(False)
+    axes.flat[0].set_ylim(0, ymax + 2)
+
+    handles = [
+        plt.Line2D([], [], marker="o", linestyle="", markersize=8,
+                   markerfacecolor=color, markeredgecolor=SURFACE, label=party)
+        for party, color in PARTIES.items()
+    ]
+    fig.legend(
+        handles=handles, loc="upper right", bbox_to_anchor=(0.99, 1.0),
+        ncol=len(PARTIES), frameon=False, fontsize=9, labelcolor=INK,
+        handletextpad=0.1, columnspacing=0.8,
+    )
+
+    fig.text(
+        0.03, 0.975, "Parteien im Trend nach Institut",
+        fontsize=16, color=INK, fontweight="bold", va="top",
+    )
+    fig.text(
+        0.03, 0.935,
+        "Seit der Bundestagswahl 2025 · Institute mit mindestens 15 Umfragen · "
+        "Punkte: einzelne Umfragen · Linien: gleitender 42-Tage-Durchschnitt",
+        fontsize=10, color=MUTED, va="top",
+    )
+    fig.text(
+        0.99, 0.01,
+        "Quelle: german_polls_bundestag.csv (Forsa, INSA, Infratest dimap, Verian u. a.)",
+        ha="right", fontsize=8.5, color=MUTED,
+    )
+
+    fig.subplots_adjust(left=0.045, right=0.985, top=0.86, bottom=0.06,
+                        hspace=0.28, wspace=0.08)
+    fig.savefig(out_path, facecolor=SURFACE)
+    print(f"Wrote {out_path}")
+
+
 def plot_coalition_trends(df: pd.DataFrame, out_path: str) -> None:
     since = df[df.index > "2025-02-23"]
     daily = since[list(PARTIES)].resample("D").mean().rolling(ROLLING_WINDOW).mean()
@@ -448,6 +526,9 @@ def main() -> None:
     parser.add_argument(
         "--out-coalition-trends", default="german_polls_coalition_trends.png"
     )
+    parser.add_argument(
+        "--out-institute-trends", default="german_polls_institute_trends.png"
+    )
     args = parser.parse_args()
     df = load_polls(args.csv)
     plot(df, args.out, "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …")
@@ -459,6 +540,7 @@ def main() -> None:
     plot_coalitions(df, args.out_coalitions)
     plot_institutes(df, args.out_institutes)
     plot_coalition_trends(df, args.out_coalition_trends)
+    plot_institute_trends(df, args.out_institute_trends)
 
 
 if __name__ == "__main__":

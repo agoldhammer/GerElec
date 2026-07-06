@@ -30,6 +30,13 @@ parties at or above 5%:
 
 ![Coalition trends](german_polls_coalition_trends.png)
 
+A sixth chart breaks the party trends down by institute as small multiples —
+one panel per institute with at least 15 polls since the 2025 election, all
+on the same scale, with a wider 42-day rolling window since institutes poll
+at very different rates:
+
+![Party trends by institute](german_polls_institute_trends.png)
+
 ## Usage
 
 Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies

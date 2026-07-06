@@ -48,6 +48,15 @@ COALITIONS = [
     ("AfD + BSW", ["AfD", "BSW"]),
 ]
 
+# Validated distinct palette for coalition lines (not party colors).
+COALITION_COLORS = {
+    "Union + AfD": "#235A97",
+    "Union + SPD + Grüne": "#C77D02",
+    "SPD + Grüne + Linke": "#C2185B",
+    "Union + Grüne": "#57A05B",
+    "Union + SPD": "#9E3540",
+}
+
 
 def load_polls(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path, parse_dates=["date"])
@@ -98,6 +107,87 @@ def dodge(values: list[float], gap: float = 0.5, step: float = 0.16) -> list[flo
             offsets[idx] = (k - (len(cluster) - 1) / 2) * step
         cluster = [i] if i is not None else []
     return offsets
+
+
+def plot_coalition_trends(df: pd.DataFrame, out_path: str) -> None:
+    since = df[df.index > "2025-02-23"]
+    daily = since[list(PARTIES)].resample("D").mean().rolling(ROLLING_WINDOW).mean()
+    # The first smoothing days average only a handful of polls; skip them.
+    daily = daily.iloc[10:]
+
+    # Majority = half the combined share of parties at/above the 5% threshold
+    # on each day (Sonstige is not a party and never wins seats).
+    parl = [p for p in PARTIES if p != "Sonstige"]
+    majority = daily[parl].where(daily[parl] >= 5).sum(axis=1) / 2
+
+    fig, ax = plt.subplots(figsize=(14, 8), dpi=200)
+    fig.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+
+    ends = {}
+    lo, hi = float(majority.min()), float(majority.max())
+    for name, color in COALITION_COLORS.items():
+        members = dict(COALITIONS)[name]
+        total = daily[members].sum(axis=1).dropna()
+        ax.plot(total.index, total.values, color=color, linewidth=2,
+                solid_capstyle="round")
+        ends[name] = float(total.iloc[-1])
+        lo, hi = min(lo, total.min()), max(hi, total.max())
+
+    ax.plot(majority.index, majority.values, color=MUTED, linewidth=1.2,
+            linestyle=(0, (4, 3)))
+    ends["Mehrheit"] = float(majority.iloc[-1])
+
+    names = list(ends)
+    lo, hi = lo - 1.5, hi + 1.5
+    labeled_ys = spread_labels([ends[n] for n in names], (hi - lo) * 0.055, lo, hi)
+    x_end = daily.index.max()
+    for name, y_label in zip(names, labeled_ys):
+        color = COALITION_COLORS.get(name, MUTED)
+        ax.annotate(
+            "", (x_end, ends[name]), xytext=(14, 0), textcoords="offset points",
+            arrowprops=dict(arrowstyle="-", color=color, linewidth=2,
+                            shrinkA=0, shrinkB=3),
+            annotation_clip=False,
+        )
+        ax.annotate(
+            f"{name}  {ends[name]:.0f}", (x_end, y_label),
+            xytext=(18, 0), textcoords="offset points",
+            va="center", fontsize=10, color=INK if name != "Mehrheit" else MUTED,
+            annotation_clip=False,
+        )
+
+    ax.set_xlim(daily.index.min(), x_end)
+    ax.set_ylim(lo, hi)
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    ax.xaxis.set_major_locator(mdates.MonthLocator(interval=2))
+    ax.xaxis.set_major_formatter(mdates.DateFormatter("%b %Y"))
+    ax.grid(axis="y", color="#e6e3e0", linewidth=0.7)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["bottom"].set_color("#d5d1cd")
+    ax.tick_params(colors=MUTED, labelsize=10, length=0)
+
+    ax.set_title(
+        "Koalitionen im Trend seit der Bundestagswahl 2025",
+        fontsize=16, color=INK, loc="left", pad=28, fontweight="bold",
+    )
+    ax.text(
+        0, 1.025,
+        "Summe der gleitenden 21-Tage-Durchschnitte · gestrichelt: Mehrheit "
+        "(Hälfte der Stimmen für Parteien ab 5 %) · rein rechnerisch",
+        transform=ax.transAxes, fontsize=10.5, color=MUTED,
+    )
+    fig.text(
+        0.99, 0.01,
+        "Quelle: german_polls_bundestag.csv (Forsa, INSA, Infratest dimap, Verian u. a.)",
+        ha="right", fontsize=8.5, color=MUTED,
+    )
+
+    fig.subplots_adjust(left=0.045, right=0.80, top=0.895, bottom=0.07)
+    fig.savefig(out_path, facecolor=SURFACE)
+    print(f"Wrote {out_path}")
 
 
 def plot_institutes(df: pd.DataFrame, out_path: str) -> None:
@@ -355,6 +445,9 @@ def main() -> None:
     parser.add_argument("--out-recent", default="german_polls_recent.png")
     parser.add_argument("--out-coalitions", default="german_polls_coalitions.png")
     parser.add_argument("--out-institutes", default="german_polls_institutes.png")
+    parser.add_argument(
+        "--out-coalition-trends", default="german_polls_coalition_trends.png"
+    )
     args = parser.parse_args()
     df = load_polls(args.csv)
     plot(df, args.out, "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …")
@@ -365,6 +458,7 @@ def main() -> None:
     )
     plot_coalitions(df, args.out_coalitions)
     plot_institutes(df, args.out_institutes)
+    plot_coalition_trends(df, args.out_coalition_trends)
 
 
 if __name__ == "__main__":

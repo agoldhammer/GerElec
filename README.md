@@ -23,6 +23,13 @@ with the all-institute rolling average on top for reference:
 
 ![Poll results by institute](german_polls_institutes.png)
 
+A fifth chart tracks the coalition combinations over time since the 2025
+election, as sums of the parties' 21-day rolling averages. The dashed line
+is the majority threshold, computed per day as half the combined share of
+parties at or above 5%:
+
+![Coalition trends](german_polls_coalition_trends.png)
+
 ## Usage
 
 Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies

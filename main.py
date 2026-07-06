@@ -39,6 +39,15 @@ MUTED = "#77716c"
 SURFACE = "#fcfcfb"
 ROLLING_WINDOW = "21D"
 
+COALITIONS = [
+    ("Union + AfD", ["CDU/CSU", "AfD"]),
+    ("Union + SPD + Grüne", ["CDU/CSU", "SPD", "Grüne"]),
+    ("Union + Grüne", ["CDU/CSU", "Grüne"]),
+    ("Union + SPD", ["CDU/CSU", "SPD"]),
+    ("SPD + Grüne + Linke", ["SPD", "Grüne", "Linke"]),
+    ("AfD + BSW", ["AfD", "BSW"]),
+]
+
 
 def load_polls(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path, parse_dates=["date"])
@@ -65,6 +74,98 @@ def spread_labels(positions: list[float], min_gap: float, lo: float, hi: float) 
     for rank, i in enumerate(order):
         out[i] = ys[rank]
     return out
+
+
+def latest_averages(df: pd.DataFrame) -> dict[str, float]:
+    """Latest rolling-average share per party, from the most recent polls."""
+    return {
+        party: float(df[party].dropna().rolling(ROLLING_WINDOW).mean().iloc[-1])
+        for party in PARTIES
+        if df[party].notna().any()
+    }
+
+
+def plot_coalitions(df: pd.DataFrame, out_path: str) -> None:
+    avg = latest_averages(df)
+    # Only parties clearing the 5% threshold enter parliament; a majority
+    # needs half the combined share of those parties, not half of all votes.
+    in_parliament = {
+        p: v for p, v in avg.items() if p != "Sonstige" and v >= 5
+    }
+    majority = sum(in_parliament.values()) / 2
+
+    rows = [
+        (name, members)
+        for name, members in COALITIONS
+        if all(p in in_parliament for p in members)
+    ]
+    rows.sort(key=lambda r: sum(in_parliament[p] for p in r[1]))
+
+    fig, ax = plt.subplots(figsize=(14, 0.9 * len(rows) + 2.4), dpi=200)
+    fig.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+
+    for y, (name, members) in enumerate(rows):
+        left = 0.0
+        for party in sorted(members, key=lambda p: -in_parliament[p]):
+            share = in_parliament[party]
+            ax.barh(y, share, left=left, height=0.62, color=PARTIES[party],
+                    edgecolor=SURFACE, linewidth=2)
+            if share >= 6:
+                ax.annotate(
+                    f"{party}  {share:.0f}", (left + share / 2, y),
+                    ha="center", va="center", fontsize=9.5, color=SURFACE,
+                )
+            left += share
+        total = f"{left:.1f}".replace(".", ",")
+        ax.annotate(
+            f"{total} %", (left, y), xytext=(8, 0), textcoords="offset points",
+            va="center", fontsize=11, color=INK,
+            fontweight="bold" if left >= majority else "normal",
+        )
+        ax.annotate(
+            name, (0, y), xytext=(0, 24), textcoords="offset points",
+            va="center", fontsize=10.5, color=INK,
+        )
+
+    ax.axvline(majority, color=INK, linewidth=1, linestyle=(0, (4, 3)))
+    ax.annotate(
+        f"Mehrheit ab {majority:.1f} %".replace(".", ","), (majority, 1.0),
+        xycoords=("data", "axes fraction"), xytext=(0, 6),
+        textcoords="offset points", ha="center", fontsize=9.5, color=INK,
+    )
+
+    ax.set_xlim(0, max(55.0, majority + 10))
+    ax.set_ylim(-0.55, len(rows) - 0.1)
+    ax.xaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    ax.set_yticks([])
+    ax.grid(axis="x", color="#e6e3e0", linewidth=0.7)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["bottom"].set_color("#d5d1cd")
+    ax.tick_params(colors=MUTED, labelsize=10, length=0)
+
+    fig.text(
+        0.03, 0.945, "Mögliche Koalitionen: rechnerische Mehrheiten",
+        fontsize=16, color=INK, fontweight="bold", va="top",
+    )
+    fig.text(
+        0.03, 0.885,
+        f"Basis: 21-Tage-Durchschnitt zum {df.index.max():%d.%m.%Y} · "
+        "Parteien unter 5 % bleiben unberücksichtigt · "
+        "rein rechnerisch, unabhängig von politischer Wahrscheinlichkeit",
+        fontsize=10, color=MUTED, va="top",
+    )
+    fig.text(
+        0.99, 0.02,
+        "Quelle: german_polls_bundestag.csv (Forsa, INSA, Infratest dimap, Verian u. a.)",
+        ha="right", fontsize=8.5, color=MUTED,
+    )
+
+    fig.subplots_adjust(left=0.03, right=0.93, top=0.78, bottom=0.11)
+    fig.savefig(out_path, facecolor=SURFACE)
+    print(f"Wrote {out_path}")
 
 
 def plot(df: pd.DataFrame, out_path: str, title: str) -> None:
@@ -162,6 +263,7 @@ def main() -> None:
     parser.add_argument("--csv", default="german_polls_bundestag.csv")
     parser.add_argument("--out", default="german_polls_bundestag.png")
     parser.add_argument("--out-recent", default="german_polls_recent.png")
+    parser.add_argument("--out-coalitions", default="german_polls_coalitions.png")
     args = parser.parse_args()
     df = load_polls(args.csv)
     plot(df, args.out, "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …")
@@ -170,6 +272,7 @@ def main() -> None:
         args.out_recent,
         "Sonntagsfrage seit der Bundestagswahl 2025",
     )
+    plot_coalitions(df, args.out_coalitions)
 
 
 if __name__ == "__main__":

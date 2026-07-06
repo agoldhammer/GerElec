@@ -10,6 +10,13 @@ A second chart covers only the polls since the February 2025 federal election:
 
 ![Polls since the 2025 election](german_polls_recent.png)
 
+A third chart shows which coalition combinations would currently have a
+parliamentary majority, based on the latest rolling averages (parties under
+the 5% threshold excluded — purely arithmetic, regardless of political
+plausibility):
+
+![Coalition combinations](german_polls_coalitions.png)
+
 ## Usage
 
 Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies

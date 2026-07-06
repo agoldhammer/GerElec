@@ -17,6 +17,12 @@ plausibility):
 
 ![Coalition combinations](german_polls_coalitions.png)
 
+A fourth chart compares institutes ("house effects"): each row is an
+institute's most recent poll from the past 90 days, sorted by AfD share,
+with the all-institute rolling average on top for reference:
+
+![Poll results by institute](german_polls_institutes.png)
+
 ## Usage
 
 Requires [uv](https://docs.astral.sh/uv/) and Python ≥ 3.14. Dependencies

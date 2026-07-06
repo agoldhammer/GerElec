@@ -85,6 +85,96 @@ def latest_averages(df: pd.DataFrame) -> dict[str, float]:
     }
 
 
+def dodge(values: list[float], gap: float = 0.5, step: float = 0.16) -> list[float]:
+    """Vertical offsets that spread out dots whose x-values nearly coincide."""
+    order = sorted(range(len(values)), key=lambda i: values[i])
+    offsets = [0.0] * len(values)
+    cluster = [order[0]]
+    for i in order[1:] + [None]:
+        if i is not None and values[i] - values[cluster[-1]] < gap:
+            cluster.append(i)
+            continue
+        for k, idx in enumerate(cluster):
+            offsets[idx] = (k - (len(cluster) - 1) / 2) * step
+        cluster = [i] if i is not None else []
+    return offsets
+
+
+def plot_institutes(df: pd.DataFrame, out_path: str) -> None:
+    cutoff = df.index.max() - pd.Timedelta(days=90)
+    latest = df[df.index >= cutoff].reset_index().groupby("institute").last()
+    latest = latest.sort_values("AfD")
+
+    avg = latest_averages(df)
+    rows = [(f"{inst}  ({row['date']:%d.%m.})", row) for inst, row in latest.iterrows()]
+    rows.append(("Ø 21-Tage-Durchschnitt", pd.Series(avg)))
+
+    fig, ax = plt.subplots(figsize=(14, 0.62 * len(rows) + 2.6), dpi=200)
+    fig.set_facecolor(SURFACE)
+    ax.set_facecolor(SURFACE)
+
+    xmax = 0.0
+    for y, (label, values) in enumerate(rows):
+        present = [p for p in PARTIES if p in values and pd.notna(values[p])]
+        vals = [float(values[p]) for p in present]
+        offsets = dodge(vals)
+        for party, v, dy in zip(present, vals, offsets):
+            ax.scatter(v, y + dy, s=90, color=PARTIES[party], zorder=3,
+                       edgecolor=SURFACE, linewidth=1.5)
+        xmax = max(xmax, max(vals))
+
+    ax.axvline(5, color=MUTED, linewidth=0.8, linestyle=(0, (1, 3)), alpha=0.8, zorder=1)
+    ax.annotate(
+        "5%-Hürde", (5, -0.5), ha="center", va="bottom", fontsize=8.5, color=MUTED,
+    )
+    ax.axhline(len(rows) - 1.5, color="#d5d1cd", linewidth=0.8)
+
+    handles = [
+        plt.Line2D([], [], marker="o", linestyle="", markersize=9,
+                   markerfacecolor=color, markeredgecolor=SURFACE, label=party)
+        for party, color in PARTIES.items()
+    ]
+    ax.legend(
+        handles=handles, loc="lower center", bbox_to_anchor=(0.5, 1.0),
+        ncol=len(PARTIES), frameon=False, fontsize=9.5, labelcolor=INK,
+        handletextpad=0.1, columnspacing=0.9, borderaxespad=0.2,
+    )
+
+    ax.set_xlim(0, xmax + 2)
+    ax.set_ylim(-0.6, len(rows) - 0.4)
+    ax.set_yticks(range(len(rows)), [label for label, _ in rows], fontsize=10)
+    ax.xaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    ax.grid(axis="x", color="#e6e3e0", linewidth=0.7)
+    ax.set_axisbelow(True)
+    for spine in ("top", "right", "left"):
+        ax.spines[spine].set_visible(False)
+    ax.spines["bottom"].set_color("#d5d1cd")
+    ax.tick_params(colors=MUTED, length=0)
+    for tick in ax.get_yticklabels():
+        tick.set_color(INK)
+    ax.get_yticklabels()[-1].set_fontweight("bold")
+
+    fig.text(
+        0.03, 0.955, "Aktuelle Umfragen nach Institut",
+        fontsize=16, color=INK, fontweight="bold", va="top",
+    )
+    fig.text(
+        0.03, 0.905,
+        f"Jeweils letzte Umfrage der vergangenen 90 Tage (Stand {df.index.max():%d.%m.%Y}), "
+        "sortiert nach AfD-Wert · Ø = gleitender 21-Tage-Durchschnitt aller Institute",
+        fontsize=10, color=MUTED, va="top",
+    )
+    fig.text(
+        0.99, 0.02,
+        "Quelle: german_polls_bundestag.csv (Forsa, INSA, Infratest dimap, Verian u. a.)",
+        ha="right", fontsize=8.5, color=MUTED,
+    )
+
+    fig.subplots_adjust(left=0.19, right=0.97, top=0.79, bottom=0.10)
+    fig.savefig(out_path, facecolor=SURFACE)
+    print(f"Wrote {out_path}")
+
+
 def plot_coalitions(df: pd.DataFrame, out_path: str) -> None:
     avg = latest_averages(df)
     # Only parties clearing the 5% threshold enter parliament; a majority
@@ -264,6 +354,7 @@ def main() -> None:
     parser.add_argument("--out", default="german_polls_bundestag.png")
     parser.add_argument("--out-recent", default="german_polls_recent.png")
     parser.add_argument("--out-coalitions", default="german_polls_coalitions.png")
+    parser.add_argument("--out-institutes", default="german_polls_institutes.png")
     args = parser.parse_args()
     df = load_polls(args.csv)
     plot(df, args.out, "Sonntagsfrage: Wenn am Sonntag Bundestagswahl wäre …")
@@ -273,6 +364,7 @@ def main() -> None:
         "Sonntagsfrage seit der Bundestagswahl 2025",
     )
     plot_coalitions(df, args.out_coalitions)
+    plot_institutes(df, args.out_institutes)
 
 
 if __name__ == "__main__":

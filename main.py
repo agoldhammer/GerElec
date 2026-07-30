@@ -271,7 +271,7 @@ def plot_coalition_trends(df: pd.DataFrame, out_path: str) -> None:
 def plot_institutes(df: pd.DataFrame, out_path: str) -> None:
     cutoff = df.index.max() - pd.Timedelta(days=90)
     latest = df[df.index >= cutoff].reset_index().groupby("institute").last()
-    latest = latest.sort_values("AfD")
+    latest = latest.sort_values("date")
 
     avg = latest_averages(df)
     rows = [(f"{inst}  ({row['date']:%d.%m.})", row) for inst, row in latest.iterrows()]
@@ -329,7 +329,7 @@ def plot_institutes(df: pd.DataFrame, out_path: str) -> None:
     fig.text(
         0.03, 0.905,
         f"Jeweils letzte Umfrage der vergangenen 90 Tage (Stand {df.index.max():%d.%m.%Y}), "
-        "sortiert nach AfD-Wert · Ø = gleitender 21-Tage-Durchschnitt aller Institute",
+        "sortiert nach Umfragedatum · Ø = gleitender 21-Tage-Durchschnitt aller Institute",
         fontsize=10, color=MUTED, va="top",
     )
     fig.text(
